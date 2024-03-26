@@ -1,13 +1,15 @@
-const { Sequelize } = require("sequelize");
+const mongoose = require("mongoose");
+require("dotenv").config(); // Для використання змінних середовища
 
+const dbUrl = process.env.MONGODB_URI; // Використовуйте змінну середовища для URI
 
-module.export = new Sequelize(
-  'tg_bot_db_pxk3',
-  'tg_bot_db_pxk3_user',
-  'FpQmhRazhdfdp2VeQsGA4pEwMRGj8DHl',
-  {
-    host: 'dpg-co1a0t8l5elc738qbebg-a',
-    port: '5432',
-    dialect: 'postgres'
+const connectDB = async () => {
+  try {
+    await mongoose.connect(dbUrl);
+  } catch (e) {
+    console.error("MongoDB connection error:", e.message);
+    process.exit(1);
   }
-)
+};
+
+module.exports = connectDB;

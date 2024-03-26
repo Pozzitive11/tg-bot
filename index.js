@@ -1,25 +1,15 @@
+const { againOptions } = require("./options");
+const { startCommand, infoCommand, startGame } = require("./botCommands");
+const User = require("./models");
+const connectDB = require("./db");
 const TelegramApi = require("node-telegram-bot-api");
-const { gameOptions, againOptions } = require("./options");
-const sequelize = require("./db");
-const UserModel = require("./models");
-const token = "7025657224:AAHoFSE5MmCfS4TWQcIZyn3lbDb7qEwn1sU";
+require("dotenv").config();
 
-const bot = new TelegramApi(token, { polling: true });
 
+const bot = new TelegramApi(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 const chats = {};
-
-const startGame = async (chatId) => {
-  await bot.sendMessage(chatId, "Guess which number from 0 to 9 I guessed");
-  const randomNumber = Math.floor(Math.random() * 10);
-  chats[chatId] = randomNumber;
-  await bot.sendMessage(chatId, `Guess`, gameOptions);
-};
-
 const start = async () => {
   try {
-    await sequelize.authenticate();
-    await sequelize.sync();
-
     bot.setMyCommands([
       { command: "/start", description: "Start greeting" },
       { command: "/info", description: "Info about user" },
@@ -30,24 +20,14 @@ const start = async () => {
       try {
         const text = msg.text;
         const chatId = msg.chat.id;
-
         if (text === "/start") {
-          await UserModel.create({chatId})
-          await bot.sendSticker(
-            chatId,
-            "https://ant.combot.org/ss/Smonkey/08f2408fdc3f41b77401fe9d305d1bdebf9b3c4e196303a9564ac76f926662903da4976f04cd1e107fecc0b1232315a828b1641bd97ca83dd0b1be39cbe6ca1b80th.png"
-          );
-          return bot.sendMessage(chatId, "Welcome to bot");
+          return await startCommand(chatId, bot);
         }
         if (text === "/info") {
-          const user = await UserModel.findOne({chatId})
-          return await bot.sendMessage(
-            chatId,
-            `Ur name ${msg.from.first_name}. You have ${user.right} correct and ${user.wrong} incorrect answers`
-          );
+          return await infoCommand(chatId, bot, msg);
         }
         if (text === "/game") {
-          return startGame(chatId);
+          return await startGame(chatId, bot, chats);
         }
         return await bot.sendMessage(chatId, "Unknown message");
       } catch (error) {
@@ -58,22 +38,32 @@ const start = async () => {
     bot.on("callback_query", async (msg) => {
       const data = msg.data;
       const chatId = msg.message.chat.id;
+      const user = await User.findOne({ chatId: chatId });
       if (data === "/again") {
-        return startGame(chatId);
+        return startGame(chatId, bot, chats);
+      }
+      if (!user) {
+        return await bot.sendMessage(
+          chatId,
+          "Please start the game with /start"
+        );
       }
       if (data == chats[chatId]) {
-        return await bot.sendMessage(chatId, `You guessed it!!!`, againOptions);
+        user.right += 1;
+        await bot.sendMessage(chatId, `You guessed it!!!`, againOptions);
       } else {
-        return await bot.sendMessage(
+        user.wrong += 1;
+        await bot.sendMessage(
           chatId,
           `Try again. Bot guessed the number ${chats[chatId]}`,
           againOptions
         );
       }
+      await user.save();
     });
   } catch (error) {
     console.log(error);
   }
 };
-
+connectDB();
 start();
